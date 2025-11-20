@@ -1,76 +1,79 @@
 // client/src/components/MessageInput.jsx
-import React, { useRef, useState } from "react";
-import { FaPaperPlane, FaPaperclip, FaSmile } from "react-icons/fa";
-import Picker from "emoji-picker-react";
+import React, { useState, useRef } from "react";
 
 export default function MessageInput({ onSend, onFile, onTyping }) {
   const [text, setText] = useState("");
-  const [showEmoji, setShowEmoji] = useState(false);
   const fileRef = useRef(null);
-  const [typingTimeout, setTypingTimeout] = useState(null);
+  const typingTimeout = useRef(null);
 
-  const send = (e) => {
-    if (e) e.preventDefault();
-    const t = text.trim();
-    if (!t) return;
-    onSend(t);
+  const handleTyping = (val) => {
+    setText(val);
+
+    if (onTyping) onTyping(true);
+
+    clearTimeout(typingTimeout.current);
+    typingTimeout.current = setTimeout(() => {
+      if (onTyping) onTyping(false);
+    }, 900);
+  };
+
+  const send = () => {
+    if (!text.trim()) return;
+    onSend(text.trim());
     setText("");
-    setShowEmoji(false);
-    onTyping(false);
+
+    if (onTyping) onTyping(false);
   };
 
-  const handleChange = (e) => {
-    setText(e.target.value);
-    if (onTyping) {
-      onTyping(true);
-      if (typingTimeout) clearTimeout(typingTimeout);
-      setTypingTimeout(setTimeout(() => onTyping(false), 800));
+  const handleKey = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      send();
     }
   };
 
-  const pickFile = () => fileRef.current?.click();
+  const pickFile = () => fileRef.current.click();
 
-  const onFileChange = async (e) => {
-    const f = e.target.files?.[0];
-    if (f && onFile) {
-      onFile(f);
-    }
-    e.target.value = null;
-  };
-
-  const onEmojiClick = (emojiData) => {
-    setText((p) => p + emojiData.emoji);
+  const handleFile = (e) => {
+    const file = e.target.files?.[0];
+    if (file) onFile(file);
+    e.target.value = "";
   };
 
   return (
-    <form onSubmit={send} className="flex items-center gap-3">
-      <button type="button" onClick={() => setShowEmoji((s) => !s)} className="text-xl text-gray-300">
-        <FaSmile />
+    <div className="flex items-center gap-3">
+      {/* FILE BUTTON */}
+      <button
+        onClick={pickFile}
+        className="text-xl text-gray-300 hover:text-white"
+      >
+        📎
       </button>
+      <input
+        type="file"
+        className="hidden"
+        ref={fileRef}
+        onChange={handleFile}
+      />
 
-      <div className="relative flex-1">
-        <input
-          value={text}
-          onChange={handleChange}
-          placeholder="Type a message"
-          className="w-full rounded-full px-4 py-2 bg-gray-800 text-white placeholder-gray-400"
-        />
-        {showEmoji && (
-          <div className="absolute bottom-12 left-0 z-50">
-            <Picker onEmojiClick={onEmojiClick} />
-          </div>
-        )}
-      </div>
+      {/* TEXT BOX */}
+      <textarea
+        value={text}
+        onChange={(e) => handleTyping(e.target.value)}
+        onKeyDown={handleKey}
+        placeholder="Type a message..."
+        rows={1}
+        className="flex-1 bg-gray-800 rounded-lg p-2 resize-none focus:outline-none"
+        style={{ maxHeight: "120px" }}
+      />
 
-      <input ref={fileRef} type="file" className="hidden" onChange={onFileChange} />
-      <button type="button" onClick={pickFile} className="p-2 rounded-full bg-gray-800 text-gray-200">
-        <FaPaperclip />
+      {/* SEND BUTTON */}
+      <button
+        onClick={send}
+        className="bg-indigo-600 px-4 py-2 rounded-lg font-medium"
+      >
+        Send
       </button>
-
-      <button type="submit" className="bg-emerald-500 px-4 py-2 rounded-full flex items-center gap-2">
-        <FaPaperPlane />
-        <span className="hidden sm:inline">Send</span>
-      </button>
-    </form>
+    </div>
   );
 }

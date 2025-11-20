@@ -1,77 +1,157 @@
 // client/src/pages/MessageList.jsx
 import React from "react";
 
-const Bubble = ({ msg, isOwn, onReact }) => {
-  const time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
-  return (
-    <div className={`flex ${isOwn ? "justify-end" : "justify-start"} group`}>
-      {!isOwn && (
-        <div className="flex-shrink-0 mr-3">
-          <img src={msg.avatar || `https://api.dicebear.com/8.x/adventurer/svg?seed=${encodeURIComponent(msg.sender || "anon")}`} alt={msg.sender} className="w-9 h-9 rounded-full" />
-        </div>
-      )}
+function formatDateLabel(ts) {
+  if (!ts) return "";
+  const d = new Date(ts);
+  return d.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
 
-      <div className="max-w-[75%]">
-        <div className={`px-4 py-2 rounded-lg break-words ${isOwn ? "bg-emerald-500 text-black rounded-br-none" : "bg-gray-700 text-white rounded-bl-none"}`}>
-          {msg.message}
-          {msg.type === "file" && msg.url && (
-            <div className="mt-2">
-              <a href={msg.url} target="_blank" rel="noreferrer" className="underline text-sm text-blue-200">
-                {msg.fileName || "Download file"}
+function smallTime(ts) {
+  if (!ts) return "";
+  const d = new Date(ts);
+  return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
+
+export default function MessageList({
+  messages = [],
+  currentUser,
+  typingUsers = [],
+  onReact = () => {},
+}) {
+  const items = [];
+  let lastDate = null;
+  let lastSender = null;
+
+  messages.forEach((m, i) => {
+    const dateLabel = formatDateLabel(m.timestamp);
+
+    // Insert date separator
+    if (dateLabel !== lastDate) {
+      items.push(
+        <div
+          key={`date-${dateLabel}-${i}`}
+          className="text-center text-gray-400 my-4 text-sm"
+        >
+          {dateLabel}
+        </div>
+      );
+      lastDate = dateLabel;
+      lastSender = null; // reset grouping
+    }
+
+    const isMine = m.sender === currentUser || m.senderId === m.currentUserId;
+    const sameSender = lastSender === m.sender;
+    lastSender = m.sender;
+
+    const key = m._id || m.id || `${i}`;
+
+    items.push(
+      <div
+        key={key}
+        className={`max-w-[75%] ${
+          isMine ? "ml-auto text-right" : "mr-auto text-left"
+        }`}
+      >
+        <div
+          className={`${
+            sameSender ? "mt-1" : "mt-4"
+          } inline-block p-3 rounded-lg ${
+            isMine ? "bg-indigo-600" : "bg-gray-800"
+          }`}
+        >
+          {/* Sender name (only for others and not grouped) */}
+          {!sameSender && !isMine && (
+            <div className="text-xs text-gray-300 mb-1">{m.sender}</div>
+          )}
+
+          {/* Message OR file */}
+          {m.url ? (
+            <div>
+              <a
+                href={m.url}
+                target="_blank"
+                rel="noreferrer"
+                className="underline break-all"
+              >
+                📎 {m.fileName || "File"}
               </a>
+
+              {/* If it's an image */}
+              {m.url.match(/\.(jpg|jpeg|png|gif|webp)$/i) && (
+                <img
+                  src={m.url}
+                  alt={m.fileName}
+                  className="mt-2 rounded max-h-72"
+                />
+              )}
             </div>
+          ) : (
+            <div className="leading-relaxed">{m.message}</div>
           )}
-        </div>
 
-        <div className={`flex items-center mt-1 text-xs ${isOwn ? "justify-end text-gray-200" : "justify-start text-gray-400"}`}>
-          <span>{msg.sender} • {time}</span>
-          {isOwn && (
-            <span className="ml-2 text-xs text-gray-300">{msg.delivered ? "✓✓" : "✓"}</span>
-          )}
-        </div>
+          {/* Timestamp + read receipts + reactions */}
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <div className="text-xs text-gray-300">
+              {smallTime(m.timestamp)}
+            </div>
 
-        {/* Reactions */}
-        {msg.reactions && Object.keys(msg.reactions).length > 0 && (
-          <div className="mt-1 flex space-x-2">
-            {Object.entries(msg.reactions).map(([emoji, users]) => (
-              <button key={emoji} className="text-sm bg-gray-800 px-2 rounded-full" title={users.join(", ")}>
-                {emoji} {users.length}
+            <div className="flex items-center gap-3">
+              {/* ✔ Delivered / ✔✔ Read */}
+              {isMine && (
+                <div className="text-xs text-gray-200">
+                  {m.readBy && m.readBy.length > 0
+                    ? "✔✔"
+                    : m.delivered
+                    ? "✔"
+                    : "⏳"}
+                </div>
+              )}
+
+              {/* Reactions */}
+              {m.reactions && Object.keys(m.reactions).length > 0 && (
+                <div className="text-sm text-yellow-300 flex flex-wrap gap-1">
+                  {Object.entries(m.reactions).map(([emoji, users], idx) => (
+                    <span key={idx}>
+                      {emoji} {users.length}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Reaction buttons */}
+          <div className="mt-2 flex gap-2">
+            {["❤️", "😂", "👍", "🔥"].map((e) => (
+              <button
+                key={e}
+                onClick={() => onReact(m._id || m.id, e)}
+                className="text-lg hover:scale-110"
+              >
+                {e}
               </button>
             ))}
           </div>
-        )}
+        </div>
       </div>
+    );
+  });
 
-      {isOwn && (
-        <div className="flex-shrink-0 ml-3">
-          <img src={msg.avatar || `https://api.dicebear.com/8.x/adventurer/svg?seed=${encodeURIComponent(msg.sender || "anon")}`} alt={msg.sender} className="w-9 h-9 rounded-full" />
-        </div>
-      )}
-    </div>
-  );
-};
-
-const MessageList = ({ messages = [], currentUser, typingUsers = [], onReact }) => {
   return (
-    <div className="flex-1 space-y-4">
-      {messages.map((msg) => {
-        const isOwn = msg.sender === currentUser || msg.senderId === undefined && msg.sender === "You";
-        // use composite key to avoid duplicates (id + senderId)
-        const key = `${msg.id}_${msg.senderId || "s"}`;
-        return (
-          <div key={key}>
-            <Bubble msg={msg} isOwn={isOwn} onReact={onReact} />
-          </div>
-        );
-      })}
+    <div className="space-y-2">
+      {items}
 
-      {typingUsers.length > 0 && (
-        <div className="text-gray-400 italic text-sm">
-          {typingUsers.join(", ")} {typingUsers.length === 1 ? "is" : "are"} typing...
+      {/* TYPING INDICATOR */}
+      {typingUsers && typingUsers.length > 0 && (
+        <div className="text-gray-400 text-sm italic mt-2">
+          {typingUsers.join(", ")} typing…
         </div>
       )}
     </div>
   );
-};
-
-export default MessageList;
+}
