@@ -1,156 +1,184 @@
-// client/src/pages/MessageList.jsx
-import React from "react";
+import React, { useState, useMemo } from "react";
+import MessageBubble from "../components/MessageBubble";
 
-function formatDateLabel(ts) {
-  if (!ts) return "";
-  const d = new Date(ts);
-  return d.toLocaleDateString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
-}
+const formatTime = (iso) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+};
 
-function smallTime(ts) {
-  if (!ts) return "";
-  const d = new Date(ts);
-  return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-}
+const IMAGE_EXT = ["png", "jpg", "jpeg", "gif", "webp", "bmp"];
+
+const looksLikeImage = (url = "") => {
+  try {
+    const lower = url.toLowerCase();
+    return IMAGE_EXT.some((ext) => lower.endsWith("." + ext));
+  } catch {
+    return false;
+  }
+};
+
+// small default emoji list (fallback)
+const DEFAULT_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🔥"];
+
+/**
+ * highlightText:
+ * - Returns safe HTML with <mark> around query matches.
+ * - If query is falsy, returns the original text escaped for HTML.
+ */
+const escapeHtml = (str = "") =>
+  String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+const highlightText = (text = "", query = "") => {
+  if (!query) return escapeHtml(text);
+  try {
+    const q = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(`(${q})`, "gi");
+    return escapeHtml(text).replace(regex, "<mark class='bg-yellow-300 text-black'>$1</mark>");
+  } catch {
+    return escapeHtml(text);
+  }
+};
 
 export default function MessageList({
   messages = [],
   currentUser,
+  currentUserId,
   typingUsers = [],
-  onReact = () => {},
+  onReact,
+  users = [],            // optional: array of {id, username, avatar}
+  searchQuery = ""       // optional, used to highlight matches
 }) {
-  const items = [];
-  let lastDate = null;
-  let lastSender = null;
+  const [openReactionFor, setOpenReactionFor] = useState(null);
 
-  messages.forEach((m, i) => {
-    const dateLabel = formatDateLabel(m.timestamp);
+  // helper to get avatar URL or fallback
+  const getAvatar = (senderId, senderName) => {
+    const u = users.find((x) => x.id === senderId);
+    if (u && u.avatar) return u.avatar;
+    // fallback to letter avatar data-url could be added later; for now return null to use initials
+    return null;
+  };
 
-    // Insert date separator
-    if (dateLabel !== lastDate) {
-      items.push(
-        <div
-          key={`date-${dateLabel}-${i}`}
-          className="text-center text-gray-400 my-4 text-sm"
-        >
-          {dateLabel}
-        </div>
-      );
-      lastDate = dateLabel;
-      lastSender = null; // reset grouping
-    }
+  const groupedBySender = useMemo(() => {
+    // not changing grouping semantics, just illustrating we can group if needed.
+    return null;
+  }, [messages]);
 
-    const isMine = m.sender === currentUser || m.senderId === m.currentUserId;
-    const sameSender = lastSender === m.sender;
-    lastSender = m.sender;
+  return (
+    <div className="space-y-4">
+      {messages.map((m) => {
+        const isMe = m.senderId === currentUserId || m.sender === currentUser;
+        const key = m._id || m.id || m.tempId;
 
-    const key = m._id || m.id || `${i}`;
+        // Avatar rendering
+        const avatarUrl = getAvatar(m.senderId, m.sender);
+        const initials = (m.sender || (isMe ? currentUser : "U")).charAt(0).toUpperCase();
 
-    items.push(
-      <div
-        key={key}
-        className={`max-w-[75%] ${
-          isMine ? "ml-auto text-right" : "mr-auto text-left"
-        }`}
-      >
-        <div
-          className={`${
-            sameSender ? "mt-1" : "mt-4"
-          } inline-block p-3 rounded-lg ${
-            isMine ? "bg-indigo-600" : "bg-gray-800"
-          }`}
-        >
-          {/* Sender name (only for others and not grouped) */}
-          {!sameSender && !isMine && (
-            <div className="text-xs text-gray-300 mb-1">{m.sender}</div>
-          )}
+        return (
+          <div key={key} className={`flex ${isMe ? "justify-end" : "justify-start"} items-end gap-3`}>
+            {/* left avatar for others */}
+            {!isMe && (
+              <div className="w-10 h-10 flex-shrink-0">
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt={m.sender || "avatar"} className="w-10 h-10 rounded-full object-cover" />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center text-xs">
+                    {initials}
+                  </div>
+                )}
+              </div>
+            )}
 
-          {/* Message OR file */}
-          {m.url ? (
-            <div>
-              <a
-                href={m.url}
-                target="_blank"
-                rel="noreferrer"
-                className="underline break-all"
-              >
-                📎 {m.fileName || "File"}
-              </a>
+            <div className={`max-w-[70%] p-3 rounded ${isMe ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-200"}`}>
+              <div className="text-xs text-gray-300 mb-1 flex items-center justify-between gap-2">
+                <span className="font-semibold">{m.sender || (isMe ? currentUser : "Unknown")}</span>
+                <span className="text-[10px] text-gray-400">{formatTime(m.timestamp)}</span>
+              </div>
 
-              {/* If it's an image */}
-              {m.url.match(/\.(jpg|jpeg|png|gif|webp)$/i) && (
-                <img
-                  src={m.url}
-                  alt={m.fileName}
-                  className="mt-2 rounded max-h-72"
+              {m.type === "file" && m.url ? (
+                looksLikeImage(m.url) ? (
+                  <div className="break-words">
+                    <img src={m.url} alt={m.fileName || "file"} style={{ maxWidth: "100%", borderRadius: 8 }} />
+                    <div className="max-w-xs rounded-lg mt-2 text-sm text-gray-200">{m.fileName}</div>
+                  </div>
+                ) : (
+                  <div className="break-words">
+                    <a href={m.url} target="_blank" rel="noreferrer" className="underline">{m.fileName || m.url}</a>
+                  </div>
+                )
+              ) : (
+                // message content with highlight
+                <div
+                  className="whitespace-pre-wrap"
+                  dangerouslySetInnerHTML={{ __html: highlightText(m.message || "", searchQuery) }}
                 />
               )}
-            </div>
-          ) : (
-            <div className="leading-relaxed">{m.message}</div>
-          )}
 
-          {/* Timestamp + read receipts + reactions */}
-          <div className="mt-2 flex items-center justify-between gap-2">
-            <div className="text-xs text-gray-300">
-              {smallTime(m.timestamp)}
-            </div>
-
-            <div className="flex items-center gap-3">
-              {/* ✔ Delivered / ✔✔ Read */}
-              {isMine && (
-                <div className="text-xs text-gray-200">
-                  {m.readBy && m.readBy.length > 0
-                    ? "✔✔"
-                    : m.delivered
-                    ? "✔"
-                    : "⏳"}
+              <div className="mt-2 flex items-center gap-2 text-xs">
+                <div className="flex items-center gap-1">
+                  {/* reactions summary */}
+                  {(m.reactions && Object.keys(m.reactions).length > 0) ? (
+                    Object.entries(m.reactions).map(([k, arr]) => (
+                      <button
+                        key={k}
+                        onClick={() => onReact && onReact(m._id || m.id, k)}
+                        className="px-2 py-0.5 rounded bg-black/20"
+                      >
+                        {k} <span className="ml-1 text-[11px]">({Array.isArray(arr) ? arr.length : 1})</span>
+                      </button>
+                    ))
+                  ) : (
+                    <button
+                      onClick={() => setOpenReactionFor(openReactionFor === key ? null : key)}
+                      className="px-2 py-0.5 rounded bg-black/10"
+                    >
+                      😊
+                    </button>
+                  )}
                 </div>
-              )}
 
-              {/* Reactions */}
-              {m.reactions && Object.keys(m.reactions).length > 0 && (
-                <div className="text-sm text-yellow-300 flex flex-wrap gap-1">
-                  {Object.entries(m.reactions).map(([emoji, users], idx) => (
-                    <span key={idx}>
-                      {emoji} {users.length}
-                    </span>
+                <div className="text-[11px] text-gray-400 ml-auto">
+                  {m.readBy && m.readBy.length > 0 ? `Read by ${m.readBy.length}` : (m.delivered ? "Delivered" : "Sending...")}
+                </div>
+              </div>
+
+              {/* emoji picker popup (simple) */}
+              {openReactionFor === key && (
+                <div className="mt-2 bg-gray-800 p-2 rounded shadow flex gap-2">
+                  {DEFAULT_EMOJIS.map((e) => (
+                    <button
+                      key={e}
+                      onClick={() => { onReact && onReact(m._id || m.id, e); setOpenReactionFor(null); }}
+                      className="text-lg"
+                    >
+                      {e}
+                    </button>
                   ))}
                 </div>
               )}
             </div>
+
+            {/* right avatar for me (optional) */}
+            {isMe && (
+              <div className="w-10 h-10 flex-shrink-0">
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt={m.sender || "avatar"} className="w-10 h-10 rounded-full object-cover" />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-indigo-400 flex items-center justify-center text-xs">
+                    {initials}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
+        );
+      })}
 
-          {/* Reaction buttons */}
-          <div className="mt-2 flex gap-2">
-            {["❤️", "😂", "👍", "🔥"].map((e) => (
-              <button
-                key={e}
-                onClick={() => onReact(m._id || m.id, e)}
-                className="text-lg hover:scale-110"
-              >
-                {e}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  });
-
-  return (
-    <div className="space-y-2">
-      {items}
-
-      {/* TYPING INDICATOR */}
       {typingUsers && typingUsers.length > 0 && (
-        <div className="text-gray-400 text-sm italic mt-2">
-          {typingUsers.join(", ")} typing…
-        </div>
+        <div className="text-sm text-gray-400 italic">{typingUsers.join(", ")} typing…</div>
       )}
     </div>
   );

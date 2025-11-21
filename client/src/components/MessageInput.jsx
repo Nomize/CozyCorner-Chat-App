@@ -1,79 +1,87 @@
-// client/src/components/MessageInput.jsx
-import React, { useState, useRef } from "react";
+// src/components/MessageInput.jsx
+import React, { useState, useRef, forwardRef, useImperativeHandle } from "react";
 
-export default function MessageInput({ onSend, onFile, onTyping }) {
-  const [text, setText] = useState("");
-  const fileRef = useRef(null);
-  const typingTimeout = useRef(null);
+const MessageInput = forwardRef(
+  ({ onSend, onFile, onTyping, disabled, toggleEmojiPicker }, ref) => {
+    const [text, setText] = useState("");
+    const inputRef = useRef(null);
 
-  const handleTyping = (val) => {
-    setText(val);
+    // Allow parent to add emoji reliably
+    useImperativeHandle(ref, () => ({
+      addEmoji: (emoji) => {
+        setText((prev) => prev + emoji);
+        if (inputRef.current) inputRef.current.focus();
+      },
+    }));
 
-    if (onTyping) onTyping(true);
+    const handleSend = () => {
+      if (text.trim()) {
+        onSend(text.trim());
+        setText("");
+      }
+    };
 
-    clearTimeout(typingTimeout.current);
-    typingTimeout.current = setTimeout(() => {
-      if (onTyping) onTyping(false);
-    }, 900);
-  };
+    const handleKey = (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleSend();
+      }
+    };
 
-  const send = () => {
-    if (!text.trim()) return;
-    onSend(text.trim());
-    setText("");
+    const handleFileUpload = (e) => {
+      const file = e.target.files?.[0];
+      if (file) onFile(file);
+      // reset input so same file can be selected again if needed
+      e.target.value = "";
+    };
 
-    if (onTyping) onTyping(false);
-  };
+    return (
+      <div className="flex items-center gap-2 bg-gray-800 p-2 rounded-xl">
+        {/* EMOJI BUTTON */}
+        <button
+          type="button"
+          onClick={toggleEmojiPicker}
+          className="p-2 bg-gray-700 rounded-lg hover:bg-gray-600"
+          aria-label="Toggle emoji picker"
+        >
+          😊
+        </button>
 
-  const handleKey = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      send();
-    }
-  };
+        {/* FILE UPLOAD */}
+        <label className="p-2 bg-gray-700 rounded-lg hover:bg-gray-600 cursor-pointer">
+          📎
+          <input type="file" className="hidden" onChange={handleFileUpload} />
+        </label>
 
-  const pickFile = () => fileRef.current.click();
+        {/* TEXT INPUT (shorter height) */}
+        <textarea
+          id="chat-input"
+          ref={inputRef}
+          value={text}
+          disabled={disabled}
+          onChange={(e) => {
+            setText(e.target.value);
+            if (onTyping) onTyping(true);
+          }}
+          onBlur={() => {
+            if (onTyping) onTyping(false);
+          }}
+          onKeyDown={handleKey}
+          placeholder="Write a message…"
+          className="flex-1 bg-gray-900 text-white p-2 rounded-lg h-12 resize-none"
+        />
 
-  const handleFile = (e) => {
-    const file = e.target.files?.[0];
-    if (file) onFile(file);
-    e.target.value = "";
-  };
+        {/* SEND BUTTON */}
+        <button
+          onClick={handleSend}
+          disabled={disabled}
+          className="bg-indigo-600 px-4 py-2 rounded-lg hover:bg-indigo-500 disabled:opacity-50"
+        >
+          Send
+        </button>
+      </div>
+    );
+  }
+);
 
-  return (
-    <div className="flex items-center gap-3">
-      {/* FILE BUTTON */}
-      <button
-        onClick={pickFile}
-        className="text-xl text-gray-300 hover:text-white"
-      >
-        📎
-      </button>
-      <input
-        type="file"
-        className="hidden"
-        ref={fileRef}
-        onChange={handleFile}
-      />
-
-      {/* TEXT BOX */}
-      <textarea
-        value={text}
-        onChange={(e) => handleTyping(e.target.value)}
-        onKeyDown={handleKey}
-        placeholder="Type a message..."
-        rows={1}
-        className="flex-1 bg-gray-800 rounded-lg p-2 resize-none focus:outline-none"
-        style={{ maxHeight: "120px" }}
-      />
-
-      {/* SEND BUTTON */}
-      <button
-        onClick={send}
-        className="bg-indigo-600 px-4 py-2 rounded-lg font-medium"
-      >
-        Send
-      </button>
-    </div>
-  );
-}
+export default MessageInput;

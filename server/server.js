@@ -17,7 +17,7 @@ if (!process.env.MONGO_URI) {
 
 mongoose
   .connect(process.env.MONGO_URI)
-  .then(() => console.log("✔ MongoDB Connected Successfully"))
+  .then(() => console.log("✅ MongoDB Connected Successfully"))
   .catch((err) => {
     console.error("❌ MongoDB Connection Error:", err);
     process.exit(1);
@@ -44,11 +44,21 @@ const MessageSchema = new mongoose.Schema({
   fileName: String,
   url: String,
   type: String,
-  reactions: Object,
+  reactions: { type: Map, of: [String], default: {} },
   readBy: [String],
+  delivered: { type: Boolean, default: false }
 });
 
 const Message = mongoose.model("Message", MessageSchema);
+
+// ---------------------------
+// DM KEY HELPER — MUST BE ABOVE SOCKET LOGIC
+// ---------------------------
+function makeDMKey(a, b) {
+  if (!a || !b) return null;
+  const [small, large] = [a, b].sort();
+  return `dm_${small}___${large}`;
+}
 
 // ---------------------------
 // EXPRESS + SOCKET.IO
@@ -61,6 +71,8 @@ const io = new Server(server, {
     methods: ["GET", "POST"],
     credentials: true,
   },
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 
 app.use(cors());
@@ -81,8 +93,23 @@ seedRooms();
 // ---------------------------
 // MEMORY STORES
 // ---------------------------
-const users = {}; // id -> { id, username }
-const typingUsers = {};
+const users = {}; // socketId -> { id, username, rooms: Set }
+const roomTyping = {}; // room -> Set of usernames
+
+// ---------------------------
+// HELPER FUNCTIONS
+// ---------------------------
+function getUsernameById(socketId) {
+  return users[socketId]?.username || "Unknown";
+}
+
+function broadcastUserList() {
+  io.emit("user_list", Object.values(users).map(u => ({
+    id: u.id,
+    username: u.username,
+    online: true
+  })));
+}
 
 // ---------------------------
 // SOCKET LOGIC
@@ -90,30 +117,85 @@ const typingUsers = {};
 io.on("connection", (socket) => {
   console.log("⚡ Connected:", socket.id);
 
-  // send rooms
+  // Send room list immediately
   Room.find().then((rooms) => {
     socket.emit("room_list", rooms.map((r) => r.name));
   });
 
-  // user joins
-  socket.on("user_join", (username) => {
-    users[socket.id] = { id: socket.id, username };
-    io.emit("user_list", Object.values(users));
+  // ---------------------------
+  // USER JOIN
+  // ---------------------------
+  socket.on("user_join", async ({username, avatar}) => {
+    users[socket.id] = { 
+      id: socket.id, 
+      username,
+      avatar: avatar || null,
+      rooms: new Set()
+    };
+    
+    broadcastUserList();
     io.emit("user_online", socket.id);
-    console.log(`${username} joined (${socket.id})`);
+    
+    // AUTO-JOIN DEFAULT ROOMS
+    const defaultRooms = await Room.find();
+    defaultRooms.forEach(room => {
+      socket.join(room.name);
+      users[socket.id].rooms.add(room.name);
+      console.log(`${username} auto-joined ${room.name}`);
+    });
+    
+    console.log(`✅ ${username} joined (${socket.id})`);
   });
 
-  // join room
+  // ---------------------------
+  // JOIN ROOM
+  // ---------------------------
   socket.on("join_room", async (roomName) => {
     if (!roomName || roomName.startsWith("dm_")) return;
 
     await Room.findOneAndUpdate({ name: roomName }, { name: roomName }, { upsert: true });
     socket.join(roomName);
+    
+    if (users[socket.id]) {
+      users[socket.id].rooms.add(roomName);
+    }
 
     const rooms = await Room.find();
     io.emit("room_list", rooms.map((r) => r.name));
 
-    console.log(`Socket ${socket.id} joined room ${roomName}`);
+    console.log(`📌 Socket ${socket.id} joined room ${roomName}`);
+  });
+
+  // ---------------------------
+  // TYPING INDICATOR
+  // ---------------------------
+  socket.on("typing", ({ isTyping, room }) => {
+    if (!room || !users[socket.id]) return;
+    
+    const username = users[socket.id].username;
+    
+    if (!roomTyping[room]) {
+      roomTyping[room] = new Set();
+    }
+
+    if (isTyping) {
+      roomTyping[room].add(username);
+    } else {
+      roomTyping[room].delete(username);
+    }
+
+    const typingList = Array.from(roomTyping[room]);
+    
+    // Broadcast to room (DM or group)
+    if (room.startsWith("dm_")) {
+      const [id1, id2] = room.replace("dm_", "").split("_");
+      // Send to both parties
+      if (id1 !== socket.id) io.to(id1).emit("typing_users", typingList);
+      if (id2 !== socket.id) io.to(id2).emit("typing_users", typingList);
+    } else {
+      // Broadcast to everyone in room EXCEPT sender
+      socket.to(room).emit("typing_users", typingList);
+    }
   });
 
   // ---------------------------
@@ -121,25 +203,36 @@ io.on("connection", (socket) => {
   // ---------------------------
   socket.on("send_message", async (msg) => {
     try {
+      if (!users[socket.id]) {
+        console.error("❌ User not found for socket:", socket.id);
+        return;
+      }
+
       const message = {
         message: msg.message,
         room: msg.room,
-        sender: users[socket.id]?.username,
+        sender: users[socket.id].username,
         senderId: socket.id,
+         senderAvatar: users[socket.id].avatar || null,
         isPrivate: false,
         timestamp: new Date().toISOString(),
+        delivered: true
       };
 
       const saved = await Message.create(message);
 
-      // send to room with REAL _id
-      io.to(msg.room).emit("receive_message", { ...message, _id: saved._id });
+      // Emit to EVERYONE in the room (including sender)
+      io.to(msg.room).emit("receive_message", { 
+        ...message, 
+        _id: saved._id.toString() 
+      });
 
-      // delivered ack
-      io.to(socket.id).emit("message_delivered", { messageId: saved._id });
+      // Delivery ack to sender
+      socket.emit("message_delivered", { messageId: saved._id.toString() });
 
+      console.log(`💬 [${msg.room}] ${users[socket.id].username}: ${msg.message}`);
     } catch (err) {
-      console.log("send_message error:", err);
+      console.error("❌ send_message error:", err);
     }
   });
 
@@ -148,34 +241,45 @@ io.on("connection", (socket) => {
   // ---------------------------
   socket.on("private_message", async ({ to, message }) => {
     try {
+      if (!users[socket.id]) return;
+
       const msg = {
         message: message.message,
-        sender: users[socket.id]?.username,
+        sender: users[socket.id].username,
         senderId: socket.id,
+        senderAvatar: users[socket.id].avatar || null,   
         receiverId: to,
         isPrivate: true,
         type: message.type || "text",
         url: message.url || null,
         fileName: message.fileName || null,
         timestamp: new Date().toISOString(),
+        delivered: true
       };
 
-      const saved = await Message.create(msg);
+      // In your backend server code
+const dmKey = makeDMKey(socket.id, to);
 
-      const [a, b] = [socket.id, to].sort();
-      const dmKey = `dm_${a}_${b}`;
+    const saved = await Message.create(msg);
 
-      // send to both
-      socket.to(to).emit("private_message", { ...msg, _id: saved._id, dmKey });
-      socket.emit("private_message", { ...msg, _id: saved._id, dmKey });
+    const payload = {
+      ...msg,
+      _id: saved._id.toString(),
+      dmKey,
+    };
 
-      io.to(socket.id).emit("message_delivered", { messageId: saved._id });
+      // Send to receiver
+      io.to(to).emit("private_message", payload);
+      
+      // Echo to sender
+      socket.emit("private_message", payload);
 
-      // unread count for recipient
-      io.to(to).emit("unread_increment", { key: dmKey, count: 1 });
+      // Delivery ack
+      socket.emit("message_delivered", { messageId: saved._id.toString() });
 
+      console.log(`💌 DM: ${users[socket.id].username} -> ${getUsernameById(to)}`);
     } catch (err) {
-      console.log("private_message error:", err);
+      console.error("❌ private_message error:", err);
     }
   });
 
@@ -184,10 +288,13 @@ io.on("connection", (socket) => {
   // ---------------------------
   socket.on("send_file", async (f) => {
     try {
+      if (!users[socket.id]) return;
+
       const msg = {
         message: null,
-        sender: users[socket.id]?.username,
+        sender: users[socket.id].username,
         senderId: socket.id,
+        senderAvatar: users[socket.id].avatar || null, 
         timestamp: new Date().toISOString(),
         type: "file",
         fileName: f.fileName,
@@ -195,56 +302,89 @@ io.on("connection", (socket) => {
         room: f.room || null,
         isPrivate: !!f.isPrivate,
         receiverId: f.receiverId || null,
+        delivered: true
       };
 
       const saved = await Message.create(msg);
 
       if (msg.isPrivate) {
         const [a, b] = [socket.id, msg.receiverId].sort();
-        const dmKey = `dm_${a}_${b}`;
+        const dmKey = makeDMKey(a, b);
 
-        socket.to(msg.receiverId).emit("receive_file", { ...msg, _id: saved._id, dmKey });
-        socket.emit("receive_file", { ...msg, _id: saved._id, dmKey });
+        const payload = { ...msg, _id: saved._id.toString(), dmKey };
 
-        io.to(msg.receiverId).emit("unread_increment", { key: dmKey, count: 1 });
+        io.to(msg.receiverId).emit("receive_file", payload);
+        socket.emit("receive_file", payload);
       } else {
-        io.to(msg.room).emit("receive_file", { ...msg, _id: saved._id });
-        io.to(socket.id).emit("message_delivered", { messageId: saved._id });
+        io.to(msg.room).emit("receive_file", { 
+          ...msg, 
+          _id: saved._id.toString() 
+        });
+        socket.emit("message_delivered", { messageId: saved._id.toString() });
       }
 
+      console.log(`📎 File shared: ${f.fileName}`);
     } catch (err) {
-      console.log("send_file error:", err);
+      console.error("❌ send_file error:", err);
     }
   });
 
   // ---------------------------
   // REACTIONS
   // ---------------------------
-  socket.on("message_reaction", ({ messageId, reaction }) => {
-    io.emit("message_reaction", {
-      messageId,
-      reaction,
-      user: users[socket.id]?.username,
-    });
+  socket.on("message_reaction", async ({ messageId, reaction }) => {
+    try {
+      if (!users[socket.id]) return;
+
+      const username = users[socket.id].username;
+
+      // Update in DB
+      const message = await Message.findById(messageId);
+      if (!message) return;
+
+      if (!message.reactions) message.reactions = new Map();
+      
+      const reactionUsers = message.reactions.get(reaction) || [];
+      if (!reactionUsers.includes(username)) {
+        reactionUsers.push(username);
+        message.reactions.set(reaction, reactionUsers);
+        await message.save();
+      }
+
+      // Broadcast
+      io.emit("message_reaction", {
+        messageId,
+        reaction,
+        user: username,
+      });
+
+      console.log(`👍 ${username} reacted with ${reaction}`);
+    } catch (err) {
+      console.error("❌ message_reaction error:", err);
+    }
   });
 
   // ---------------------------
-  // READ RECEIPTS (FIXED _id)
+  // READ RECEIPTS
   // ---------------------------
-  socket.on("read_receipt", ({ messageId }) => {
-    if (!messageId) return;
+  socket.on("read_receipt", async ({ messageId }) => {
+    if (!messageId || !users[socket.id]) return;
 
-    Message.findByIdAndUpdate(
-      messageId,
-      { $addToSet: { readBy: users[socket.id]?.username } }
-    )
-      .then(() => {
-        io.emit("read_receipt", {
-          messageId,
-          user: users[socket.id]?.username,
-        });
-      })
-      .catch((err) => console.log("read_receipt error:", err));
+    try {
+      const username = users[socket.id].username;
+
+      await Message.findByIdAndUpdate(
+        messageId,
+        { $addToSet: { readBy: username } }
+      );
+
+      io.emit("read_receipt", {
+        messageId,
+        user: username,
+      });
+    } catch (err) {
+      console.error("❌ read_receipt error:", err);
+    }
   });
 
   // ---------------------------
@@ -252,8 +392,23 @@ io.on("connection", (socket) => {
   // ---------------------------
   socket.on("disconnect", () => {
     if (users[socket.id]) {
+      const username = users[socket.id].username;
+      
+      // Clear typing indicators
+      Object.keys(roomTyping).forEach(room => {
+        if (roomTyping[room]) {
+          roomTyping[room].delete(username);
+          const typingList = Array.from(roomTyping[room]);
+          io.to(room).emit("typing_users", typingList);
+        }
+      });
+
       io.emit("user_offline", socket.id);
       delete users[socket.id];
+      
+      broadcastUserList();
+      
+      console.log(`👋 ${username} disconnected`);
     }
   });
 });
@@ -269,5 +424,10 @@ app.post("/api/upload", upload.single("file"), (req, res) => {
 });
 
 // ---------------------------
+// START SERVER
+// ---------------------------
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => console.log(`🔥 Server running on ${PORT}`));
+server.listen(PORT, () => {
+  console.log(`🔥 Server running on port ${PORT}`);
+  console.log(`📡 Socket.IO ready`);
+});
