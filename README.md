@@ -1,77 +1,192 @@
-# Real-Time Chat Application with Socket.io
 
-This assignment focuses on building a real-time chat application using Socket.io, implementing bidirectional communication between clients and server.
+# **CozyCorner – Real-Time Chat Application**
 
-## Assignment Overview
+CozyCorner is a real-time chat application built with  **React** ,  **Node.js** ,  **Express** ,  **Socket.io** , and  **MongoDB** .
 
-You will build a chat application with the following features:
-1. Real-time messaging using Socket.io
-2. User authentication and presence
-3. Multiple chat rooms or private messaging
-4. Real-time notifications
-5. Advanced features like typing indicators and read receipts
+It supports global chatrooms, private messaging, file sharing, reactions, read receipts, notifications, avatars, and more.
 
-## Project Structure
+This project was built as part of the Week 5 Real-Time Communication assignment.
+
+---
+
+## **🌟 Features Implemented**
+
+### **Core Functionality**
+
+* Username-based authentication
+* Live global chatroom
+* Real-time messages (no page reload)
+* Sender’s username + timestamp
+* Online/offline user presence
+* Typing indicators
+
+### **Advanced Chat Features**
+
+✔ Private messaging (DMs) with correct DM keying
+
+✔ Multiple chat rooms
+
+✔ File & image sharing
+
+✔ Message reactions
+
+✔ Read receipts
+
+### **Real-Time Notifications**
+
+* Unread message counts
+* Sound alerts (DM, file, group message types)
+* Browser notifications when app is unfocused
+* Notification batching logic
+
+### **Performance + UX**
+
+* Reconnection logic
+* Delivery acknowledgment
+* Message search
+* Sender and date filtering
+* Mobile-responsive design
+* Avatars displayed in DMs
+* Clean message grouping for DM rooms
+
+---
+
+## **📁 Project Structure**
 
 ```
-socketio-chat/
-├── client/                 # React front-end
-│   ├── public/             # Static files
-│   ├── src/                # React source code
-│   │   ├── components/     # UI components
-│   │   ├── context/        # React context providers
-│   │   ├── hooks/          # Custom React hooks
-│   │   ├── pages/          # Page components
-│   │   ├── socket/         # Socket.io client setup
-│   │   └── App.jsx         # Main application component
-│   └── package.json        # Client dependencies
-├── server/                 # Node.js back-end
-│   ├── config/             # Configuration files
-│   ├── controllers/        # Socket event handlers
-│   ├── models/             # Data models
-│   ├── socket/             # Socket.io server setup
-│   ├── utils/              # Utility functions
-│   ├── server.js           # Main server file
-│   └── package.json        # Server dependencies
-└── README.md               # Project documentation
+CozyCorner/
+│
+├── client/                       # React front-end
+│   ├── public/
+│   ├── src/
+│   │   ├── components/           # UI components
+│   │   │   ├── ChatHeader.jsx
+│   │   │   ├── MessageBubble.jsx
+│   │   │   ├── MessageInput.jsx
+│   │   │   ├── OnlineUsers.jsx
+│   │   │   ├── Sidebar.jsx
+│   │   │   └── TypingIndicators.jsx
+│   │   │
+│   │   ├── context/
+│   │   │   └── NotificationContext.jsx
+│   │   │
+│   │   ├── hooks/
+│   │   │   └── useSocket.js      # Core socket logic
+│   │   │
+│   │   ├── pages/
+│   │   │   ├── ChatRoom.jsx
+│   │   │   └── MessageList.jsx
+│   │   │
+│   │   ├── socket/
+│   │   │   └── socket.js
+│   │   │
+│   │   ├── main.jsx
+│   │   └── index.css
+│   │
+│   └── package.json
+│
+├── server/                       # Node.js backend
+│   ├── config/
+│   │   └── db.js                 # MongoDB connection
+│   │
+│   ├── controllers/
+│   │   └── chatController.js     # Server socket events
+│   │
+│   ├── models/
+│   │   ├── Message.js
+│   │   ├── Room.js
+│   │   └── User.js
+│   │
+│   ├── socket/
+│   │   └── index.js              # Socket.io initialization
+│   │
+│   ├── uploads/                  # Stored uploaded files
+│   │
+│   ├── utils/
+│   │   ├── helpers.js            # Utility functions
+│   │   └── upload.js             # Multer upload config
+│   │
+│   ├── server.js
+│   └── package.json
+│
+├── Week5-Assignment.md
+└── README.md
 ```
 
-## Getting Started
+---
 
-1. Accept the GitHub Classroom assignment invitation
-2. Clone your personal repository that was created by GitHub Classroom
-3. Follow the setup instructions in the `Week5-Assignment.md` file
-4. Complete the tasks outlined in the assignment
+## **🚀 Getting Started**
 
-## Files Included
+### **1. Install Dependencies**
 
-- `Week5-Assignment.md`: Detailed assignment instructions
-- Starter code for both client and server:
-  - Basic project structure
-  - Socket.io configuration templates
-  - Sample components for the chat interface
+#### Client:
 
-## Requirements
+```sh
+cd client
+npm install
+npm run dev
+```
 
-- Node.js (v18 or higher)
-- npm or yarn
-- Modern web browser
-- Basic understanding of React and Express
+#### Server:
 
-## Submission
+```sh
+cd server
+npm install
+npm start
+```
 
-Your work will be automatically submitted when you push to your GitHub Classroom repository. Make sure to:
+---
 
-1. Complete both the client and server portions of the application
-2. Implement the core chat functionality
-3. Add at least 3 advanced features
-4. Document your setup process and features in the README.md
-5. Include screenshots or GIFs of your working application
-6. Optional: Deploy your application and add the URLs to your README.md
+## **🔧 Environment Variables**
 
-## Resources
+Create a `.env` file inside  **server/** :
 
-- [Socket.io Documentation](https://socket.io/docs/v4/)
-- [React Documentation](https://react.dev/)
-- [Express.js Documentation](https://expressjs.com/)
-- [Building a Chat Application with Socket.io](https://socket.io/get-started/chat) 
+```
+MONGO_URI=your_mongo_connection
+ALLOWED_ORIGIN=http://localhost:5173
+```
+
+---
+
+## **🧪 How It Works**
+
+* When a user joins, Socket.io registers their username and avatar.
+* Each user is placed in the **Global** room automatically.
+* Users can join channels or open direct chats.
+* Private messages use a stable DM key:
+
+  `dm_<smallID>___<largeID>`
+* Messages are saved to MongoDB and streamed to both sender and receiver.
+* React groups conversations and updates the UI in real-time.
+
+---
+
+## **📌 Deployment**
+
+Fill these when ready:
+
+### **Client (Vercel)**
+
+🔗 Deployed Link: *coming soon*
+
+### **Server (Render)**
+
+🔗 API / Websocket URL: *coming soon*
+
+---
+
+## **📷 Screenshots**
+
+*(Included in project folder.)*
+
+---
+
+## **📚 Resources Used**
+
+* Socket.io v4
+* React + Vite
+* Express.js
+* MongoDB + Mongoose
+* DiceBear Avatars API
+
+---

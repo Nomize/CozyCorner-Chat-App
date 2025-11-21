@@ -1,191 +1,100 @@
-# **CozyCorner – Real-Time Chat Application**
+# 🔄 Week 5: Real-Time Communication with Socket.io
 
-CozyCorner is a real-time chat application built with  **React** ,  **Node.js** ,  **Express** ,  **Socket.io** , and  **MongoDB** .
+## 🚀 Objective
 
-It supports global chatrooms, private messaging, file sharing, reactions, read receipts, notifications, avatars, and more.
+Build a real-time chat application using Socket.io that demonstrates bidirectional communication between clients and server, implementing features like live messaging, notifications, and online status updates.
 
-This project was built as part of the Week 5 Real-Time Communication assignment.
+## 📂 Tasks
 
----
+### Task 1: Project Setup
 
-## **🌟 Features Implemented**
+- Set up a Node.js server with Express
+- Configure Socket.io on the server side
+- Create a React front-end application
+- Set up Socket.io client in the React app
+- Establish a basic connection between client and server
 
-### **Core Functionality**
+### Task 2: Core Chat Functionality
 
-* Username-based authentication
-* Live global chatroom
-* Real-time messages (no page reload)
-* Sender’s username + timestamp
-* Online/offline user presence
-* Typing indicators
+- Implement user authentication (simple username-based or JWT)
+- Create a global chat room where all users can send and receive messages
+- Display messages with sender's name and timestamp
+- Show typing indicators when a user is composing a message
+- Implement online/offline status for users
 
-### **Advanced Chat Features**
+### Task 3: Advanced Chat Features
 
-✔ Private messaging (DMs) with correct DM keying
+- Create private messaging between users
+- Implement multiple chat rooms or channels
+- Add "user is typing" indicator
+- Enable file or image sharing
+- Implement read receipts for messages
+- Add message reactions (like, love, etc.)
 
-✔ Multiple chat rooms
+### Task 4: Real-Time Notifications
 
-✔ File & image sharing
+- Send notifications when a user receives a new message
+- Notify when a user joins or leaves a chat room
+- Display unread message count
+- Implement sound notifications for new messages
+- Add browser notifications (using the Web Notifications API)
 
-✔ Message reactions
+### Task 5: Performance and UX Optimization
 
-✔ Read receipts
+- Implement message pagination for loading older messages
+- Add reconnection logic for handling disconnections
+- Optimize Socket.io for performance (using namespaces, rooms)
+- Implement message delivery acknowledgment
+- Add message search functionality
+- Ensure the application works well on both desktop and mobile devices
 
-### **Real-Time Notifications**
+## 🧪 Expected Outcome
 
-* Unread message counts
-* Sound alerts (DM, file, group message types)
-* Browser notifications when app is unfocused
-* Notification batching logic
+- A fully functional real-time chat application
+- Smooth bidirectional communication using Socket.io
+- Good user experience with proper error handling and loading states
+- Implementation of at least 3 advanced chat features
+- Responsive design that works on different devices
 
-### **Performance + UX**
+## 🛠️ Setup
 
-* Reconnection logic
-* Delivery acknowledgment
-* Message search
-* Sender and date filtering
-* Mobile-responsive design
-* Avatars displayed in DMs
-* Clean message grouping for DM rooms
+1. Make sure you have Node.js installed (v18+ recommended)
+2. Clone the starter code repository
+3. Install server dependencies:
+   ```
+   cd server
+   npm install
+   ```
+4. Install client dependencies:
+   ```
+   cd client
+   npm install
+   ```
+5. Start the development servers:
+   ```
+   # In the server directory
+   npm run dev
 
----
+   # In the client directory
+   npm run dev
+   ```
 
-## **📁 Project Structure**
+## ✅ Submission Instructions
 
-```
-CozyCorner/
-│
-├── client/                       # React front-end
-│   ├── public/
-│   ├── src/
-│   │   ├── components/           # UI components
-│   │   │   ├── ChatHeader.jsx
-│   │   │   ├── MessageBubble.jsx
-│   │   │   ├── MessageInput.jsx
-│   │   │   ├── OnlineUsers.jsx
-│   │   │   ├── Sidebar.jsx
-│   │   │   └── TypingIndicators.jsx
-│   │   │
-│   │   ├── context/
-│   │   │   └── NotificationContext.jsx
-│   │   │
-│   │   ├── hooks/
-│   │   │   └── useSocket.js      # Core socket logic
-│   │   │
-│   │   ├── pages/
-│   │   │   ├── ChatRoom.jsx
-│   │   │   └── MessageList.jsx
-│   │   │
-│   │   ├── socket/
-│   │   │   └── socket.js
-│   │   │
-│   │   ├── main.jsx
-│   │   └── index.css
-│   │
-│   └── package.json
-│
-├── server/                       # Node.js backend
-│   ├── config/
-│   │   └── db.js                 # MongoDB connection
-│   │
-│   ├── controllers/
-│   │   └── chatController.js     # Server socket events
-│   │
-│   ├── models/
-│   │   ├── Message.js
-│   │   ├── Room.js
-│   │   └── User.js
-│   │
-│   ├── socket/
-│   │   └── index.js              # Socket.io initialization
-│   │
-│   ├── uploads/                  # Stored uploaded files
-│   │
-│   ├── utils/
-│   │   ├── helpers.js            # Utility functions
-│   │   └── upload.js             # Multer upload config
-│   │
-│   ├── server.js
-│   └── package.json
-│
-├── Week5-Assignment.md
-└── README.md
-```
-
----
-
-## **🚀 Getting Started**
-
-### **1. Install Dependencies**
-
-#### Client:
-
-```sh
-cd client
-npm install
-npm run dev
-```
-
-#### Server:
-
-```sh
-cd server
-npm install
-npm start
-```
-
----
-
-## **🔧 Environment Variables**
-
-Create a `.env` file inside  **server/** :
-
-```
-MONGO_URI=your_mongo_connection
-ALLOWED_ORIGIN=http://localhost:5173
-```
-
----
-
-## **🧪 How It Works**
-
-* When a user joins, Socket.io registers their username and avatar.
-* Each user is placed in the **Global** room automatically.
-* Users can join channels or open direct chats.
-* Private messages use a stable DM key:
-
-  `dm_<smallID>___<largeID>`
-* Messages are saved to MongoDB and streamed to both sender and receiver.
-* React groups conversations and updates the UI in real-time.
-
----
-
-## **📌 Deployment**
-
-Fill these when ready:
-
-### **Client (Vercel)**
-
-🔗 Deployed Link: *coming soon*
-
-### **Server (Render)**
-
-🔗 API / Websocket URL: *coming soon*
-
----
-
-## **📷 Screenshots**
-
-*(Included in project folder.)*
-
----
-
-## **📚 Resources Used**
-
-* Socket.io v4
-* React + Vite
-* Express.js
-* MongoDB + Mongoose
-* DiceBear Avatars API
-
----
+1. Accept the GitHub Classroom assignment invitation
+2. Clone your personal repository that was created by GitHub Classroom
+3. Complete all the tasks in the assignment
+4. Commit and push your code regularly to show progress
+5. Include in your repository:
+   - Complete client and server code
+   - A comprehensive README.md with:
+     - Project overview
+     - Setup instructions
+     - Features implemented
+     - Screenshots or GIFs of the application
+6. Optional: Deploy your application
+   - Deploy the server to a service like Render, Railway, or Heroku
+   - Deploy the client to Vercel, Netlify, or GitHub Pages
+   - Add the deployed URLs to your README.md
+7. Your submission will be automatically graded based on the criteria in the autograding configuration
+8. The instructor will review your submission after the autograding is complete
