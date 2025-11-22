@@ -1,4 +1,3 @@
-
 # **CozyCorner – Real-Time Chat Application**
 
 CozyCorner is a real-time chat application built with  **React** ,  **Node.js** ,  **Express** ,  **Socket.io** , and  **MongoDB** .
@@ -165,7 +164,7 @@ ALLOWED_ORIGIN=http://localhost:5173
 
 ### **Client (Vercel)**
 
-🔗 Deployed Link: *(https://cozy-corner-chat-app.vercel.app)*
+🔗 Deployed Link: *(https://cozy-corner-chat-app.vercel.app/)*
 
 ### **Server (Render)**
 
