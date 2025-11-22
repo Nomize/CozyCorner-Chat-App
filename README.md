@@ -163,15 +163,13 @@ ALLOWED_ORIGIN=http://localhost:5173
 
 ## **📌 Deployment**
 
-Fill these when ready:
-
 ### **Client (Vercel)**
 
-🔗 Deployed Link: *coming soon*
+🔗 Deployed Link: *(https://cozy-corner-chat-app.vercel.app)*
 
 ### **Server (Render)**
 
-🔗 API / Websocket URL: *coming soon*
+🔗 API / Websocket URL: *(https://cozycorner-chat-app.onrender.com)*
 
 ---
 
